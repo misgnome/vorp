@@ -5,6 +5,8 @@ from lxml.cssselect import CSSSelector
 import requests
 from bs4 import BeautifulSoup
 from lxml import etree, objectify
+import re
+
 
 # ask user for what season she wants to see VORP for
 season = input("Enter the season you want to see a summary of. Refer to it by the year that year's finals is in: ")
@@ -38,49 +40,117 @@ box_urls= ["https://www.basketball-reference.com" + page for page in box_pages]
 #box_trees = [lh.fromstring(source.text) for source in box_sources]
 source = requests.get(box_urls[0])
 #store contents of the page under doc
-doc = lh.fromstring(source.text)
+soup = BeautifulSoup(source.content,'html5lib')
 
-player_sel = CSSSelector("[id$='line_score']")
+tables = soup.find_all("table")
 
-
-
-players = player_sel(doc)
-player_list = [player.text for player in players]
-print(player_list)
+temp = [tables[7],tables[15]]
+tables = temp
 
 
 
+home_advanced = tables[1]
+away_advanced = tables[0]
+
+home_id = home_advanced.get("id")
+away_id = away_advanced.get("id")
+
+home_team = home_id[4:7]
+away_team = away_id[4:7]
+
+tables_string = str(tables[0]) + str(tables[1])
+soup = BeautifulSoup(tables_string, 'html5lib')
+
+links = soup.find_all('a')
+Players = []
+for link in links:
+	Players.append(link.text)
+
+
+
+home_string = str(home_advanced)
+away_string = str(away_advanced)
+
+
+home_soup = BeautifulSoup(home_string, 'html5lib')
+away_soup = BeautifulSoup(away_string, 'html5lib')
+
+home_links = home_soup.find_all('a')
+away_links = away_soup.find_all('a')
+
+Home_Players = []
+for h in home_links:
+	Home_Players.append(h.text)
+
+Away_Players = []
+for a in away_links:
+	Away_Players.append(a.text)
 
 
 
 
+home_df = pd.DataFrame()
+home_df["Player"] = Home_Players
+home_teams = [home_team] * len(Home_Players)
+
+away_df = pd.DataFrame()
+away_df["Player"] = Away_Players
+away_teams = [away_team] * len(Away_Players)
+
+teams = [away_df, home_df]
+
+teams_df = pd.concat(teams)
+
+stats = soup.find_all('td',{'data-stat':'mp'})
+mps = []
+for stat in stats:
+	mps.append(stat.text)
+
+Teams = away_teams + home_teams
+
+player_stats=[]
+team_minutes = []
+
+t = 0	
+for tr in soup.find_all('tr'):
+	tds = tr.find_all(['th', 'td'])
+	stats = []
+	header = False
+	DNP = True
+	for i in range(0, len(tds)-1):
+	 	if tds[i].text == "Starters" or tds[i].text == "Reserves" or tds[i+1].text == "Advanced Box Score Stats":
+	 		header = True
+	 		break
+	 	if tds[i].text == "Team Totals":
+	 		header = True
+	 		team_minutes.append(tds[i+1].text)
+	 		break
+	 	if tds[i+1].text != "Did Not Play":
+	 		DNP = False
+	 		stats.append(tds[i].text)
+	
+	stats.append(tds[-1].text)
+	if not header: 
+		t += 1
+		
+		if not DNP:
+			stats.append(Teams[t-1])
+			
+	
+	if len(stats) == 17:
+		player_stats.append(stats)
 
 
 
 
-source = requests.get("https://www.basketball-reference.com/leagues/NBA_2020_advanced.html")
+df = pd.DataFrame(player_stats, columns = ["Player", "MP", "TS%", "eFG%", "3PAr", "FTr", "ORB%", "DRB%", "TRB%", "AST%", "STL%", "BLK%", "TOV%", "USG%", "ORtg", "DRtg", "Team"])
+df["Team Minutes"] = team_minutes[0]
+df["Date"] = box_pages[0][11:19]
 
-tree = lh.fromstring(source.text)
-
-#print(lh.tostring(tree))
-
-player_sel = CSSSelector(" th+ .left > a, #advanced_stats_clone > tbody > tr:nth-child(2) > td") 
-
-vorp_sel = CSSSelector('.right:nth-child(29)')
-
-
-players = player_sel(tree)
-vorps = vorp_sel(tree)
-#print(results)
-
-
-
-player_list = [player.text for player in players]
-vorp_list = [vorp.text for vorp in vorps]
-
-data = {"Name":player_list, "VORP":vorp_list}
-df = pd.DataFrame(data)
 
 print(df)
+
+
+
 
 
