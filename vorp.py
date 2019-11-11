@@ -9,13 +9,30 @@ import re
 import os
 import json
 from datetime import datetime as dt 
-import timeit
+import time
+import multiprocessing
 
 # ask user for what season she wants to see VORP for
+t_0 = time.time()
 coeffs = [0.123391,0.119597,-0.151287,1.255644,0.531838,-0.305868,0.921292,0.711217,0.017022,0.297639,0.213485,0.725930]
 season = input("Enter the season you want to see a summary of. Refer to it by the year that year's finals is in: ")
 output = "Producing VORPs for the {0}-{1} season.".format(str(int(season)-1), season)
 print(output)
+select = input("Full Season + Playoffs (FSP), just full regular season (RS),  playoffs only (PO), or first n games (1N)?" )
+oneN = False
+FSP = False
+PO = False
+RS = False 
+if select == "1N" :
+	oneN = True
+	num_games = int(input("how many games?"))
+if select == "FSP":
+	FSP = True
+if select == "RS":
+	RS = True
+	num_games = 1230
+if select == "PO":
+	PO = True
 
 #Get web pages for seasons game schedule
 months = ["october", "november", "december", "january", "february", "march", "april", "may", "june"]
@@ -24,60 +41,88 @@ months = ["october", "november", "december", "january", "february", "march", "ap
 def url(x) :
 	return("https://www.basketball-reference.com/leagues/NBA_{0}_games-{1}.html".format(season,x))
 
-urls = map(url, months)
+
+urls = [url(month) for month in months]
 
 
 #use requests to parse html
+s = requests.Session()
+sources = map(s.get, urls)
+t_1 = time.time()
 
-sources = map(requests.get, urls)
 #structure html as trees
 def get_text(x) :
 	return(lh.fromstring(x.text))
 
-trees = map(get_text, sources)
 
+
+trees = [get_text(source) for source in sources]
 
 #iterate and grab all box score pages
 box_sel = CSSSelector(".center a ")
 
-box_months = map(box_sel, trees)
-box_links = []
 
-for month in box_months:
-	for game in month:
-		box_links.append(game)
+box_months = [box_sel(tree) for tree in trees]
 
 
-#box_pages= [link.get('href') for link in box_links]
-box_pages = list(map(lambda x: x.get('href'), box_links))
 
-box_urls= map(lambda x :"https://www.basketball-reference.com{}".format(x), box_pages)
+
+
+
+box_links = [game for month in box_months for game in month]
+box_pages = [box_link.get('href') for box_link in box_links]
+box_urls= ["https://www.basketball-reference.com{}".format(box_page) for box_page in box_pages]
+if oneN or RS:
+	box_pages = box_pages[0:num_games]
+	box_urls = box_urls[0:num_games]
+if PO:
+	box_pages = box_pages[1231:len(box_urls)]
+	box_urls = box_urls[1231:len(box_urls)]
+
+
+
 
 #use requests to parse html for one box score page
 
 
-# box_sources = [requests.get(url) for url in box_urls]
-# box_trees = [lh.fromstring(source.text) for source in box_sources]
-# sources = [requests.get(box_urls[i]) for i in range(0,14)]
-# if os.path.exists("box_urls.txt"):
-# 	os.remove("box_urls.txt")
-# else:
-# 	print("the file does not exist!")
 
-# f = open("box_urls.txt", "a")
+
+box_sources = [s.get(url) for url in box_urls]
+
+box_trees = [lh.fromstring(source.text) for source in box_sources]
+sources = [s.get(box_url) for box_url in box_urls]
+
+
+file_name = "stats_{}.txt".format(season)
+f = open(file_name, "w+")
+if os.path.exists(file_name):
+	os.remove(file_name)
+else:
+	print("the file does not exist!")
+
+
+
+mylist= []
+for i in range(0,len(box_urls)):
+	page = sources[i].text.replace('\"', "\'")
+	page = page.replace("\\", "\\\\")
+	mylist.append({'html': page })
+json.dump(mylist, open(file_name, "w+"))
+
+# f = open(file_name, "a")
 # f.write("[")
-# for i in range(0,14):
+# for i in range(0,num_games):
 # 	f.write('{ "html": "')
 # 	page = sources[i].text.replace('\"', "\'")
 # 	page = page.replace("\\", "\\\\")
 # 	f.write(page)
 # 	f.write('"}')
-# 	if i < 13:
+# 	if i < len(num_games) -1:
 # 		f.write(",")
 # f.write("]")
 # f.close()
 
-f = open("box_urls.txt")
+f = open(file_name)
 scores = json.loads(f.read(), strict = False)
 f.close()
 
@@ -250,7 +295,7 @@ for soup in soups:
 	
 	j += 1
 master_df.replace('', 0, inplace=True)
-print(master_df["MP"])
+
 master_df["MP"] = pd.to_datetime(master_df["MP"], format = "%M:%S")
 master_df["MP"] = master_df["MP"].dt.minute + master_df["MP"].dt.second/60
 master_df[["MP", "FG", "FGA", "FG%", "3P", "3PA", "3P%", "FT", "FTA", "FT%", "ORB", "DRB", \
