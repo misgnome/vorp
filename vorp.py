@@ -3,152 +3,301 @@ import pandas as pd
 import lxml.html as lh
 from lxml.cssselect import CSSSelector
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 from lxml import etree, objectify
 import re
-
+import os
+import json
+from datetime import datetime as dt 
+import timeit
 
 # ask user for what season she wants to see VORP for
+coeffs = [0.123391,0.119597,-0.151287,1.255644,0.531838,-0.305868,0.921292,0.711217,0.017022,0.297639,0.213485,0.725930]
 season = input("Enter the season you want to see a summary of. Refer to it by the year that year's finals is in: ")
-output = "Producing VORPs for the " + str(int(season)-1) + "-" + season + " season."
+output = "Producing VORPs for the {0}-{1} season.".format(str(int(season)-1), season)
 print(output)
 
 #Get web pages for seasons game schedule
 months = ["october", "november", "december", "january", "february", "march", "april", "may", "june"]
-urls  = ["https://www.basketball-reference.com/leagues/NBA_"+season+"_games-" + month + ".html" for month in months]
+
+#urls  = ["https://www.basketball-reference.com/leagues/NBA_{0}_games-{1}.html".format(season,month) for month in months]
+def url(x) :
+	return("https://www.basketball-reference.com/leagues/NBA_{0}_games-{1}.html".format(season,x))
+
+urls = map(url, months)
+
+
 #use requests to parse html
-sources = [requests.get(url) for url in urls]
+
+sources = map(requests.get, urls)
 #structure html as trees
-trees = [lh.fromstring(source.text) for source in sources]
+def get_text(x) :
+	return(lh.fromstring(x.text))
+
+trees = map(get_text, sources)
+
 
 #iterate and grab all box score pages
 box_sel = CSSSelector(".center a ")
-box_months = [box_sel(tree) for tree in trees]
+
+box_months = map(box_sel, trees)
 box_links = []
+
 for month in box_months:
 	for game in month:
 		box_links.append(game)
 
-box_pages= [link.get('href') for link in box_links]
 
-box_urls= ["https://www.basketball-reference.com" + page for page in box_pages]
+#box_pages= [link.get('href') for link in box_links]
+box_pages = list(map(lambda x: x.get('href'), box_links))
+
+box_urls= map(lambda x :"https://www.basketball-reference.com{}".format(x), box_pages)
 
 #use requests to parse html for one box score page
 
 
-#box_sources = [requests.get(url) for url in box_urls]
-#box_trees = [lh.fromstring(source.text) for source in box_sources]
-source = requests.get(box_urls[0])
+# box_sources = [requests.get(url) for url in box_urls]
+# box_trees = [lh.fromstring(source.text) for source in box_sources]
+# sources = [requests.get(box_urls[i]) for i in range(0,14)]
+# if os.path.exists("box_urls.txt"):
+# 	os.remove("box_urls.txt")
+# else:
+# 	print("the file does not exist!")
+
+# f = open("box_urls.txt", "a")
+# f.write("[")
+# for i in range(0,14):
+# 	f.write('{ "html": "')
+# 	page = sources[i].text.replace('\"', "\'")
+# 	page = page.replace("\\", "\\\\")
+# 	f.write(page)
+# 	f.write('"}')
+# 	if i < 13:
+# 		f.write(",")
+# f.write("]")
+# f.close()
+
+f = open("box_urls.txt")
+scores = json.loads(f.read(), strict = False)
+f.close()
+
+
+
+soups = map( lambda x: BeautifulSoup(x['html'], 'lxml', parse_only = SoupStrainer("table")), scores)
+
+tableses = map(lambda x: x.find_all("table"), soups)
 #store contents of the page under doc
-soup = BeautifulSoup(source.content,'html5lib')
 
-tables = soup.find_all("table")
+temps = [[tables[6],tables[14]] for tables in tableses]
+tableses = temps
 
-temp = [tables[7],tables[15]]
-tables = temp
+home_basics = [tables[1] for tables in tableses]
+away_basics = [tables[0] for tables in tableses]
 
+home_ids = [home_basic.get("id") for home_basic in home_basics]
+away_ids = [away_basic.get("id") for away_basic in away_basics]
 
+home_teams = [home_id[4:7] for home_id in home_ids]
+away_teams = [away_id[4:7] for away_id in away_ids]
 
-home_advanced = tables[1]
-away_advanced = tables[0]
+tables_strings = [str(tables[0]) + str(tables[1]) for tables in tableses]
+soups = [BeautifulSoup(tables_string, 'lxml') for tables_string in tables_strings]
 
-home_id = home_advanced.get("id")
-away_id = away_advanced.get("id")
-
-home_team = home_id[4:7]
-away_team = away_id[4:7]
-
-tables_string = str(tables[0]) + str(tables[1])
-soup = BeautifulSoup(tables_string, 'html5lib')
-
-links = soup.find_all('a')
-Players = []
-for link in links:
-	Players.append(link.text)
+linkses = [soup.find_all('a') for soup in soups]
 
 
+home_strings = [str(home_basic) for home_basic in home_basics]
+away_strings = [str(away_basic) for away_basic in away_basics]
 
-home_string = str(home_advanced)
-away_string = str(away_advanced)
 
+home_soups = [BeautifulSoup(home_string, 'lxml') for home_string in home_strings]
+away_soups = [BeautifulSoup(away_string, 'lxml') for away_string in away_strings]
 
-home_soup = BeautifulSoup(home_string, 'html5lib')
-away_soup = BeautifulSoup(away_string, 'html5lib')
-
-home_links = home_soup.find_all('a')
-away_links = away_soup.find_all('a')
-
-Home_Players = []
-for h in home_links:
-	Home_Players.append(h.text)
-
-Away_Players = []
-for a in away_links:
-	Away_Players.append(a.text)
+home_linkses = [home_soup.find_all('a') for home_soup in home_soups]
+away_linkses = [away_soup.find_all('a') for away_soup in away_soups]
 
 
 
 
-home_df = pd.DataFrame()
-home_df["Player"] = Home_Players
-home_teams = [home_team] * len(Home_Players)
 
-away_df = pd.DataFrame()
-away_df["Player"] = Away_Players
-away_teams = [away_team] * len(Away_Players)
 
-teams = [away_df, home_df]
+All_Home_Players = [[h.text for h in home_links] for home_links in home_linkses]
 
-teams_df = pd.concat(teams)
 
-stats = soup.find_all('td',{'data-stat':'mp'})
-mps = []
-for stat in stats:
-	mps.append(stat.text)
+All_Away_Players = [[a.text for a in away_links] for away_links in away_linkses]
 
-Teams = away_teams + home_teams
+statses = [soup.find_all('td', {'data-stat':'mp'}) for soup in soups]
+Dates = [box_page[11:19] for box_page in box_pages]
+j = 0
+for soup in soups:
+	Date = box_pages[j][11:19]
+	home_df = pd.DataFrame()
+	home_df["Player"] = All_Home_Players[j]
+	home_teamses = [home_teams[j]] * len(All_Home_Players[j])
 
-player_stats=[]
-team_minutes = []
+	away_df = pd.DataFrame()
+	away_df["Player"] = All_Away_Players[j]
+	away_teamses = [away_teams[j]] * len(All_Away_Players[j])
 
-t = 0	
-for tr in soup.find_all('tr'):
-	tds = tr.find_all(['th', 'td'])
-	stats = []
-	header = False
-	DNP = True
-	for i in range(0, len(tds)-1):
-	 	if tds[i].text == "Starters" or tds[i].text == "Reserves" or tds[i+1].text == "Advanced Box Score Stats":
-	 		header = True
-	 		break
-	 	if tds[i].text == "Team Totals":
-	 		header = True
-	 		team_minutes.append(tds[i+1].text)
-	 		break
-	 	if tds[i+1].text != "Did Not Play":
-	 		DNP = False
-	 		stats.append(tds[i].text)
+	teams = [away_df, home_df]
+
+	teams_df = pd.concat(teams)
+	stats = soup.find_all('td',{'data-stat':'mp'})
+	mps = []
+	for stat in stats:
+		mps.append(stat.text)
+
+	Teams = away_teamses + home_teamses
+
+	player_stats=[]
+	team_minutes = []
 	
-	stats.append(tds[-1].text)
-	if not header: 
-		t += 1
-		
-		if not DNP:
-			stats.append(Teams[t-1])
+
+	team_stats = pd.DataFrame(columns = ["Date", "FGA", "FTA", "ORB", "DRB", "TOV", "3PA"])
+	t = 0	
+	team_stats = [[[Date] + [tds[i+3].text] + [tds[i+9].text] + [tds[i+11].text] + [tds[i+12].text] + [tds[i+17].text] +[tds[i+6].text]] \
+		for i in range(0, len(tds) -1) if (tds := tr.find_all['th', 'td']) for tr in soup.find_all('tr')]
+
+	print(team_stats)
+	# for tr in soup.find_all('tr'):
+	# 	tds = tr.find_all(['th', 'td'])
+	# 	for i in range(0, len(tds)-1):
+	# 		if tds[i].text == "Team Totals":
+				
 			
+	# 			team_stats = team_stats.append(pd.DataFrame([[Date] + [tds[i+3].text] + [tds[i+9].text] + [tds[i+11].text] + [tds[i+12].text] + [tds[i+17].text] +[tds[i+6].text]], columns = ["Date", "FGA", "FTA", "ORB", "DRB", "TOV", "3PA"]), ignore_index= True)
+
+# 	temp = team_stats.iloc[0, 6] 
+
+# 	#swap 3PA to make it Opp3PA
+# 	team_stats.iloc[0, 6] = team_stats.iloc[1, 6]
+# 	team_stats.iloc[1, 6] = temp
+
+# 	team_stats = pd.DataFrame([team_stats.iloc[0]] * len(away_teamses) + [team_stats.iloc[1]] * len(home_teamses), columns = ["Date", "FGA","FTA", "ORB", "DRB", "TOV", "3PA"])
 	
-	if len(stats) == 17:
-		player_stats.append(stats)
+
+# 	for tr in soup.find_all('tr'):
+# 		tds = tr.find_all(['th', 'td'])
+# 		stats = []
+# 		header = False
+# 		DNP = True
+		
+# 		for i in range(0, len(tds)-1):
+# 			if tds[i].text == "Starters" or tds[i].text == "Reserves" or tds[i+1].text == "Basic Box Score Stats":
+# 				header = True
+# 				break
+# 			if tds[i].text == "Team Totals":
+# 				header = True
+# 				team_minutes.append(tds[i+1].text)
+# 				break
+# 			if tds[i+1].text != "Did Not Play":
+# 				DNP = False
+# 				stats.append(tds[i].text)
+# 			else: 
+# 				stats.append(tds[i].text)
+# 				dnp = ["00:00"] + ["0"] * 19
+# 				stats = stats + dnp		
+# 		if not DNP: 
+# 			stats.append(tds[-1].text)
+# 		if not header: 
+# 			t += 1
+# 			stats = stats + list(team_stats.iloc[t-1])
+			
+# 			stats.append(Teams[t-1])
+			
+			
+# 		if len(stats) == 29:
+# 			player_stats.append(stats)
+	
+# 	if j == 0:
+# 		master_df = pd.DataFrame(player_stats, columns = ["Player", "MP", "FG", "FGA", "FG%", "3P", "3PA", "3P%", "FT", "FTA", "FT%", "ORB", "DRB", \
+# 			"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "Date", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA","Team"])
+
+# 		master_df["TmMP"] = team_minutes[0]
+
+
+# 		# master_df["BPM"] = coeffs[0]*master_df["MP"]\
+# 		#  + coeffs[1]*master_df["ORB%"]\
+# 		#   + coeffs[2] * master_df["DRB%"]\
+# 		#    + coeffs[3] * master_df["STL%"]\
+# 		#     + coeffs[4] * master_df['BLK%']\
+# 		#      + coeffs[5] * master_df["AST%"]\
+# 		#       - coeffs[6] * master_df["USG%"] * master_df["TOV%"]\
+# 		#        + coeffs[7] * master_df["USG%"] * (1 - master_df["TOV%"]) * (2 * (master_df["TS%"]-master_df["TmTS%"]) + coeffs[8] * master_df["AST%"] + coeffs[9] * (master_df["3PAr"] - master_df["3PAr"].mean()) - coeffs[10])\
+# 		#         + coeffs[11] * master_df["AST%"]**(1/2) * master_df["TRB%"]**(1/2)
+
+		
+		
+# 	else:
+# 		df = pd.DataFrame(player_stats, columns = ["Player", "MP", "FG", "FGA", "FG%", "3P", "3PA","3P%", "FT", "FTA", "FT%", "ORB", "DRB", \
+# 			"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "Date", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA", "Team"])		
+		
+		
+# 		df["TmMP"] = team_minutes[0]
+		
+
+		
+# 		# df["BPM"] = coeffs[0]*df["MP"]\
+# 		#  + coeffs[1]*df["ORB%"]\
+# 		#   + coeffs[2] * df["DRB%"]\
+# 		#    + coeffs[3] * df["STL%"]\
+# 		#     + coeffs[4] * df['BLK%']\
+# 		#      + coeffs[5] * df["AST%"]\
+# 		#       - coeffs[6] * df["USG%"] * df["TOV%"]\
+# 		#        + coeffs[7] * df["USG%"] * (1 - df["TOV%"]) * (2 * (df["TS%"]-df["TmTS%"]) + coeffs[8] * df["AST%"] + coeffs[9] * (df["3PAr"] - df["3PAr"].mean()) - coeffs[10])\
+# 		#         + coeffs[11] * df["AST%"]**(1/2) * df["TRB%"]**(1/2)
+		
+		
+# 		master_df = master_df.append(df)
+
+	
+# 	j += 1
+# master_df.replace('', 0, inplace=True)
+# print(master_df["MP"])
+# master_df["MP"] = pd.to_datetime(master_df["MP"], format = "%M:%S")
+# master_df["MP"] = master_df["MP"].dt.minute + master_df["MP"].dt.second/60
+# master_df[["MP", "FG", "FGA", "FG%", "3P", "3PA", "3P%", "FT", "FTA", "FT%", "ORB", "DRB", \
+# 	"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA"]] = master_df[["MP", "FG", "FGA", "FG%", "3P", "3PA", "3P%", "FT", "FTA", "FT%", "ORB", "DRB", \
+# 	"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA"]].apply(pd.to_numeric)
+# master_df["Date"] = pd.to_datetime(master_df["Date"], format = "%Y%m%d")
+# master_df = master_df.reset_index( drop = True)
+
+# players = master_df["Player"].unique()
 
 
 
+# cumulative_basics = pd.DataFrame( columns = [ "Player", "Date", "Team", "MP", "FG", "FGA", "3P", "3PA", "FT", "FTA", "ORB", "DRB", \
+# 				"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA", "TmMP"])
 
-df = pd.DataFrame(player_stats, columns = ["Player", "MP", "TS%", "eFG%", "3PAr", "FTr", "ORB%", "DRB%", "TRB%", "AST%", "STL%", "BLK%", "TOV%", "USG%", "ORtg", "DRtg", "Team"])
-df["Team Minutes"] = team_minutes[0]
-df["Date"] = box_pages[0][11:19]
+# dates = master_df["Date"].unique()
+
+# i = 0
 
 
-print(df)
+# for date in dates:
+# 	for player in players:
+# 		playedToday = True
+# 		if master_df[(player == master_df["Player"]) & (date == master_df["Date"])].empty:
+# 			playedToday = False
+# 		data = master_df[(player == master_df["Player"]) & (date >= master_df["Date"]) & playedToday][["Player", "Date", "Team", "MP", "FG", "FGA", "3P", "3PA", "FT", "FTA", "ORB", "DRB", \
+# 				"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA", "TmMP"]]
+# 		if not data.empty:
+			
+# 			stats = data[[ "MP", "FG", "FGA", "3P", "3PA", "FT", "FTA", "ORB", "DRB", \
+# 				"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA", "TmMP"]].sum(axis = 0).to_frame().T
+			
+# 			stats["Player"] = data["Player"].iloc[0]
+# 			stats["Date"] = data["Date"].iloc[0]
+# 			stats["Team"] = data["Team"].iloc[0]
+# 			stats = stats[[ "Player", "Date", "Team", "MP", "FG", "FGA", "3P", "3PA", "FT", "FTA", "ORB", "DRB", \
+# 				"TRB","AST","STL","BLK", "TOV", "PF", "PTS", "+/-", "TmFGA", "TmFTA", "TmORB", "TmDRB", "TmTOV", "Opp3PA", "TmMP"]]
+# 			cumulative_basics = cumulative_basics.append(stats)
+			
+				
+# 			i+=1
+			
+# cumulative_basics = cumulative_basics.reset_index(drop = True)
+# print(cumulative_basics)
 
 
 
