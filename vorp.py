@@ -12,43 +12,6 @@ from datetime import datetime as dt
 import time
 import multiprocessing
 
-# ask user for what season she wants to see VORP for
-t_0 = time.time()
-coeffs = [0.123391,0.119597,-0.151287,1.255644,0.531838,-0.305868,0.921292,0.711217,0.017022,0.297639,0.213485,0.725930]
-season = input("Enter the season you want to see a summary of. Refer to it by the year that year's finals is in: ")
-output = "Producing VORPs for the {0}-{1} season.".format(str(int(season)-1), season)
-print(output)
-select = input("Full Season + Playoffs (FSP), just full regular season (RS),  playoffs only (PO), or first n games (1N)?" )
-oneN = False
-FSP = False
-PO = False
-RS = False 
-if select == "1N" :
-	oneN = True
-	num_games = int(input("how many games?"))
-if select == "FSP":
-	FSP = True
-if select == "RS":
-	RS = True
-	num_games = 1230
-if select == "PO":
-	PO = True
-
-#Get web pages for seasons game schedule
-months = ["october", "november", "december", "january", "february", "march", "april", "may", "june"]
-
-#urls  = ["https://www.basketball-reference.com/leagues/NBA_{0}_games-{1}.html".format(season,month) for month in months]
-def url(x) :
-	return("https://www.basketball-reference.com/leagues/NBA_{0}_games-{1}.html".format(season,x))
-
-
-urls = [url(month) for month in months]
-
-
-#use requests to parse html
-s = requests.Session()
-sources = map(s.get, urls)
-t_1 = time.time()
 
 #structure html as trees
 def get_text(x) :
