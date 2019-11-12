@@ -1,6 +1,10 @@
 import authorizer as auth
+from collector import collect_raw_schedule_pages
+from collector import collect_raw_box_score_pages
+from indexer import index_unindexed_pages
 
 authorizer = auth.Authorizer()
+
 
 if __name__ == '__main__':
 
@@ -20,17 +24,27 @@ if __name__ == '__main__':
     select = int(input("\n" )[0])
 
     values[select-1] = True
-    
+
     user_preferences = dict(zip(names, values))
-    
+
+    num_games = None
     if user_preferences['1N']:
         num_games = int(input("how many games?"))
     elif user_preferences['RS']:
         num_games = 1230
-    else:
-        num_games = 0
 
-    # Fetch any pages that are not already in our database 
-    collect_raw_pages(authorizer, season)
+    # Fetch any schedule pages that are not already in our database 
+    collect_raw_schedule_pages(authorizer, season)
+
+    # Extract box scores from raw schedule and results pages
+    # TODO: this can be optimized by storing the box score links that are
+    # extracted in the db so they do not have to be recomputed every time
+    box_score_page_urls = extract_box_scores_links_from_raw_schedule_pages(authorizer, season)
+
+    # Fetch any box score pages that are not already in our database 
+    collect_raw_box_score_pages(authorizer,season, box_score_page_urls)
+
+
+
     
 
