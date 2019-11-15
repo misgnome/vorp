@@ -1,12 +1,15 @@
-import authorizer as auth
-from collector import collect_raw_schedule_pages
 from collector import collect_raw_box_score_pages
-from indexer import index_unindexed_pages
+from collector import collect_raw_schedule_pages
+from dotenv import load_dotenv
+from indexer import extract_box_score_links_from_raw_schedule_pages 
+import authorizer as auth
 
-authorizer = auth.Authorizer()
+
 
 
 if __name__ == '__main__':
+    load_dotenv()
+    authorizer = auth.Authorizer()
 
     season = input("Enter the season you want to see a summary of. Refer to it by the year that year's finals is in: ")
 
@@ -20,7 +23,6 @@ if __name__ == '__main__':
 
     names = ['FSP','RS','PO','1N']
     values = [False,False,False,False]
-
     select = int(input("\n" )[0])
 
     values[select-1] = True
@@ -39,7 +41,7 @@ if __name__ == '__main__':
     # Extract box scores from raw schedule and results pages
     # TODO: this can be optimized by storing the box score links that are
     # extracted in the db so they do not have to be recomputed every time
-    box_score_page_urls = extract_box_scores_links_from_raw_schedule_pages(authorizer, season)
+    box_score_page_urls = extract_box_score_links_from_raw_schedule_pages(authorizer, season)
 
     # Fetch any box score pages that are not already in our database 
     collect_raw_box_score_pages(authorizer,season, box_score_page_urls)

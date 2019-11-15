@@ -52,7 +52,7 @@ def collect_raw_box_score_pages(authorizer, season, box_score_page_urls):
         if has_raw_box_score_page(authorizer,url):
             continue # do not add again
 
-        r = requests.get(url, header=HEADERS)
+        r = requests.get(url, headers=HEADERS)
         add_raw_page(authorizer, url, season, r.text,
                 const.BOX_SCORE_PAGE_TYPE)
 
