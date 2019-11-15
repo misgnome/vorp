@@ -4,7 +4,7 @@ import lxml.html as lh
 from lxml.cssselect import CSSSelector
 import requests
 from bs4 import BeautifulSoup, SoupStrainer
-from lxml import etree, objectify
+from lxml import objectify
 import re
 import os
 import json
@@ -16,48 +16,55 @@ import multiprocessing
 
 soups = map( lambda x: BeautifulSoup(x['html'], 'lxml', parse_only = SoupStrainer("table")), scores)
 
+#get tables in iterable form
 tableses = map(lambda x: x.find_all("table"), soups)
 #store contents of the page under doc
 
+#get only basic stats tables
 temps = [[tables[6],tables[14]] for tables in tableses]
 tableses = temps
 
-home_basics = [tables[1] for tables in tableses]
-away_basics = [tables[0] for tables in tableses]
+# #separate basic stats into respective home and away tables
+# home_basics = [tables[1] for tables in tableses]
+# away_basics = [tables[0] for tables in tableses]
 
-home_ids = [home_basic.get("id") for home_basic in home_basics]
-away_ids = [away_basic.get("id") for away_basic in away_basics]
+# # get names of home and away teams
+# home_ids = [home_basic.get("id") for home_basic in home_basics]
+# away_ids = [away_basic.get("id") for away_basic in away_basics]
 
-home_teams = [home_id[4:7] for home_id in home_ids]
-away_teams = [away_id[4:7] for away_id in away_ids]
+# #store names of home and away teams
+# home_teams = [home_id[4:7] for home_id in home_ids]
+# away_teams = [away_id[4:7] for away_id in away_ids]
 
+# turn basic box scores into a single string of html for each box score in DB
 tables_strings = [str(tables[0]) + str(tables[1]) for tables in tableses]
 soups = [BeautifulSoup(tables_string, 'lxml') for tables_string in tables_strings]
 
+#get list of all players in each game 
 linkses = [soup.find_all('a') for soup in soups]
 
+# # get basic stats for each team in each game
+# home_strings = [str(home_basic) for home_basic in home_basics]
+# away_strings = [str(away_basic) for away_basic in away_basics]
 
-home_strings = [str(home_basic) for home_basic in home_basics]
-away_strings = [str(away_basic) for away_basic in away_basics]
+# #parse basic stats for each team
+# home_soups = [BeautifulSoup(home_string, 'lxml') for home_string in home_strings]
+# away_soups = [BeautifulSoup(away_string, 'lxml') for away_string in away_strings]
 
-
-home_soups = [BeautifulSoup(home_string, 'lxml') for home_string in home_strings]
-away_soups = [BeautifulSoup(away_string, 'lxml') for away_string in away_strings]
-
-home_linkses = [home_soup.find_all('a') for home_soup in home_soups]
-away_linkses = [away_soup.find_all('a') for away_soup in away_soups]
-
-
-
+# # get objects that contain names of players for each home and away team and store separately 
+# home_linkses = [home_soup.find_all('a') for home_soup in home_soups]
+# away_linkses = [away_soup.find_all('a') for away_soup in away_soups]
 
 
 
-All_Home_Players = [[h.text for h in home_links] for home_links in home_linkses]
 
 
-All_Away_Players = [[a.text for a in away_links] for away_links in away_linkses]
+# # store lists of home players, away player names for each game 
+# All_Home_Players = [[h.text for h in home_links] for home_links in home_linkses]
+# All_Away_Players = [[a.text for a in away_links] for away_links in away_linkses]
 
-statses = [soup.find_all('td', {'data-stat':'mp'}) for soup in soups]
+
+#get date of game 
 Dates = [box_page[11:19] for box_page in box_pages]
 j = 0
 for soup in soups:
