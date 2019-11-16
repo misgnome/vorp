@@ -7,8 +7,8 @@ HEADERS = {'user-agent': 'samuel-leonards/V0RP'}
 def has_raw_box_score_page(authorizer, url):
     cur = authorizer.conn.cursor()
     cur.execute("""
-    select 1 from raw_box_score_pages where url = %s
-    """, (url,))
+    select 1 from raw_pages where (url,type) = (%s, %s)
+    """, (url, const.BOX_SCORE_PAGE_TYPE))
     if cur.fetchone():
         return True
     return False
@@ -17,27 +17,18 @@ def has_raw_box_score_page(authorizer, url):
 def has_raw_schedule_page(authorizer, url):
     cur = authorizer.conn.cursor()
     cur.execute("""
-    select 1 from raw_schedule_pages where url = %s
-    """, (url,))
+    select 1 from raw_pages where (url,type) = (%s, %s)
+    """, (url, const.SCHEDULE_PAGE_TYPE))
     if cur.fetchone():
         return True
     return False
 
 
-def add_raw_box_score_page(authorizer, url, season, text):
+def add_raw_page(authorizer, url, season, text, _type):
     cur = authorizer.conn.cursor()
     cur.execute("""
-    insert into raw_box_score_pages (url,season,raw_html)
-    values (%s,%s,%s)""", (url,season,text))
-    authorizer.conn.commit()
-    cur.close()
-
-
-def add_raw_schedule_page(authorizer, url, season, text):
-    cur = authorizer.conn.cursor()
-    cur.execute("""
-    insert into raw_schedule_pages (url,season,raw_html)
-    values (%s,%s,%s)""", (url,season,text))
+    insert into raw_pages (url,season,raw_html,type)
+    values (%s,%s,%s,%s)""", (url,season,text, _type))
     authorizer.conn.commit()
     cur.close()
 
@@ -51,7 +42,8 @@ def collect_raw_schedule_pages(authorizer, season):
             continue # do not add again
 
         r = requests.get(url, headers=HEADERS)
-        add_raw_schedule_page(authorizer, url, season, r.text)
+        add_raw_page(authorizer, url, season, r.text,
+                const.SCHEDULE_PAGE_TYPE)
 
     
 def collect_raw_box_score_pages(authorizer, season, box_score_page_urls):
@@ -60,8 +52,9 @@ def collect_raw_box_score_pages(authorizer, season, box_score_page_urls):
         if has_raw_box_score_page(authorizer,url):
             continue # do not add again
 
-        r = requests.get(url, header=HEADERS)
-        add_box_score_page(authorizer, url, season, r.text)
+        r = requests.get(url, headers=HEADERS)
+        add_raw_page(authorizer, url, season, r.text,
+                const.BOX_SCORE_PAGE_TYPE)
 
 
 
